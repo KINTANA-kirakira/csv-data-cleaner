@@ -1,0 +1,98 @@
+from __future__ import annotations
+
+from typing import Literal, Sequence
+
+import pandas as pd
+
+SortOrder = Literal["asc", "desc"]
+SortType = Literal["text", "number", "date"]
+
+
+class MissingColumnsError(ValueError):
+    """Raised when a requested CSV column is not present."""
+
+    def __init__(self, missing_columns: Sequence[str]) -> None:
+        self.missing_columns = list(missing_columns)
+        names = ", ".join(self.missing_columns)
+        super().__init__(f"指定された列がCSVにありません: {names}")
+
+
+def parse_columns(value: str | None) -> list[str] | None:
+    """Parse comma-separated column names from CLI input."""
+    if value is None or value.strip() == "":
+        return None
+
+    columns = [column.strip() for column in value.split(",")]
+    return [column for column in columns if column]
+
+
+def clean_dataframe(
+    df: pd.DataFrame,
+    *,
+    columns: Sequence[str] | None = None,
+    dedupe: bool = False,
+    sort_by: str | None = None,
+    sort_type: SortType = "text",
+    sort_order: SortOrder = "asc",
+) -> pd.DataFrame:
+    """Clean a CSV DataFrame by deduplicating, sorting, and selecting columns."""
+    if sort_order not in ("asc", "desc"):
+        raise ValueError("sort_order must be 'asc' or 'desc'")
+
+    if sort_type not in ("text", "number", "date"):
+        raise ValueError("sort_type must be 'text', 'number', or 'date'")
+
+    work = df.copy()
+    requested_columns = list(columns or [])
+    if sort_by:
+        requested_columns.append(sort_by)
+    _validate_columns(work, requested_columns)
+
+    if dedupe:
+        work = work.drop_duplicates()
+
+    if sort_by:
+        work = _sort_dataframe(work, sort_by, sort_type, sort_order)
+
+    if columns is not None:
+        work = work.loc[:, list(columns)]
+
+    return work.reset_index(drop=True)
+
+
+def _validate_columns(df: pd.DataFrame, requested_columns: Sequence[str]) -> None:
+    missing_columns = [
+        column
+        for column in dict.fromkeys(requested_columns)
+        if column not in df.columns
+    ]
+    if missing_columns:
+        raise MissingColumnsError(missing_columns)
+
+
+def _sort_dataframe(
+    df: pd.DataFrame,
+    sort_by: str,
+    sort_type: SortType,
+    sort_order: SortOrder,
+) -> pd.DataFrame:
+    sort_key_name = "__csv_cleaner_sort_key__"
+    work = df.copy()
+    work[sort_key_name] = _build_sort_key(work[sort_by], sort_type)
+    work = work.sort_values(
+        by=sort_key_name,
+        ascending=sort_order == "asc",
+        kind="mergesort",
+    )
+    return work.drop(columns=[sort_key_name])
+
+
+def _build_sort_key(series: pd.Series, sort_type: SortType) -> pd.Series:
+    if sort_type == "number":
+        normalized = series.astype(str).str.replace(",", "", regex=False)
+        return pd.to_numeric(normalized, errors="raise")
+
+    if sort_type == "date":
+        return pd.to_datetime(series, errors="raise")
+
+    return series.astype(str)
