@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import sys
+import sysconfig
 from pathlib import Path
 
 import pandas as pd
@@ -12,7 +12,32 @@ import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CLI_PATH = PROJECT_ROOT / "src" / "clean_csv.py"
-CLI_ENV = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+SRC_PATH = PROJECT_ROOT / "src"
+PYTHONPATH_PARTS = [str(SRC_PATH)]
+if os.environ.get("PYTHONPATH"):
+    PYTHONPATH_PARTS.append(os.environ["PYTHONPATH"])
+CLI_ENV = {
+    **os.environ,
+    "PYTHONIOENCODING": "utf-8",
+    "PYTHONPATH": os.pathsep.join(PYTHONPATH_PARTS),
+}
+
+
+def current_environment_console_script(name: str) -> str | None:
+    scripts_dir = Path(sysconfig.get_path("scripts"))
+    candidates = [scripts_dir / name]
+    if os.name == "nt":
+        candidates = [
+            scripts_dir / f"{name}.exe",
+            scripts_dir / f"{name}.cmd",
+            scripts_dir / name,
+        ]
+
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+
+    return None
 
 
 def test_cli_creates_cleaned_csv(tmp_path: Path) -> None:
@@ -113,7 +138,7 @@ def test_cli_returns_error_for_missing_column(tmp_path: Path) -> None:
 
 
 def test_installed_console_script_creates_cleaned_csv(tmp_path: Path) -> None:
-    command = shutil.which("csv-data-cleaner")
+    command = current_environment_console_script("csv-data-cleaner")
     if command is None:
         pytest.skip("csv-data-cleaner command is available after pip install -e .")
 
