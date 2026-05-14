@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import unicodedata
 from typing import Literal, Sequence
 
 import pandas as pd
@@ -89,10 +91,45 @@ def _sort_dataframe(
 
 def _build_sort_key(series: pd.Series, sort_type: SortType) -> pd.Series:
     if sort_type == "number":
-        normalized = series.astype(str).str.replace(",", "", regex=False)
-        return pd.to_numeric(normalized, errors="raise")
+        return _build_number_sort_key(series)
 
     if sort_type == "date":
-        return pd.to_datetime(series, errors="raise")
+        return _build_date_sort_key(series)
 
     return series.astype(str)
+
+
+def _build_number_sort_key(series: pd.Series) -> pd.Series:
+    normalized = series.map(_normalize_number_text)
+    converted = pd.to_numeric(normalized, errors="coerce")
+    invalid_mask = normalized.notna() & converted.isna()
+
+    if invalid_mask.any():
+        examples = ", ".join(series[invalid_mask].astype(str).unique()[:5])
+        raise ValueError(f"数値として変換できない値があります: {examples}")
+
+    return converted
+
+
+def _normalize_number_text(value: object) -> str | None:
+    if pd.isna(value):
+        return None
+
+    text = unicodedata.normalize("NFKC", str(value)).strip()
+    if text == "" or text.lower() in {"nan", "none", "null"}:
+        return None
+
+    text = re.sub(r"(?i)jpy", "", text)
+    text = re.sub(r"[,\s¥￥円$]", "", text)
+    return text or None
+
+
+def _build_date_sort_key(series: pd.Series) -> pd.Series:
+    converted = pd.to_datetime(series, errors="coerce")
+    invalid_mask = series.notna() & (series.astype(str).str.strip() != "") & converted.isna()
+
+    if invalid_mask.any():
+        examples = ", ".join(series[invalid_mask].astype(str).unique()[:5])
+        raise ValueError(f"日付として変換できない値があります: {examples}")
+
+    return converted

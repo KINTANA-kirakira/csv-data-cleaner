@@ -1,14 +1,9 @@
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pandas as pd
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-
-from csv_cleaner import MissingColumnsError, clean_dataframe
+from csv_data_cleaner import MissingColumnsError, clean_dataframe
 
 
 def sample_sales_df() -> pd.DataFrame:
@@ -19,7 +14,7 @@ def sample_sales_df() -> pd.DataFrame:
                 "顧客名": "田中商店",
                 "商品名": "ノートPC",
                 "数量": 1,
-                "金額": 120000,
+                "金額": "¥120,000",
                 "社内メモ": "至急",
             },
             {
@@ -27,7 +22,7 @@ def sample_sales_df() -> pd.DataFrame:
                 "顧客名": "青山食品",
                 "商品名": "プリンター",
                 "数量": 2,
-                "金額": 54000,
+                "金額": "54,000",
                 "社内メモ": "電話確認済み",
             },
             {
@@ -35,7 +30,7 @@ def sample_sales_df() -> pd.DataFrame:
                 "顧客名": "田中商店",
                 "商品名": "ノートPC",
                 "数量": 1,
-                "金額": 120000,
+                "金額": "¥120,000",
                 "社内メモ": "至急",
             },
             {
@@ -43,7 +38,7 @@ def sample_sales_df() -> pd.DataFrame:
                 "顧客名": "北川物流",
                 "商品名": "モニター",
                 "数量": 3,
-                "金額": 81000,
+                "金額": "８１，０００",
                 "社内メモ": "月末請求",
             },
         ]
@@ -81,7 +76,7 @@ def test_sorts_by_date_ascending() -> None:
     ]
 
 
-def test_sorts_by_amount_descending() -> None:
+def test_sorts_by_amount_descending_with_currency_and_full_width_numbers() -> None:
     cleaned = clean_dataframe(
         sample_sales_df(),
         dedupe=True,
@@ -90,7 +85,7 @@ def test_sorts_by_amount_descending() -> None:
         sort_order="desc",
     )
 
-    assert list(cleaned["金額"]) == [120000, 81000, 54000]
+    assert list(cleaned["金額"]) == ["¥120,000", "８１，０００", "54,000"]
 
 
 def test_raises_error_for_missing_columns() -> None:
@@ -98,3 +93,12 @@ def test_raises_error_for_missing_columns() -> None:
         clean_dataframe(sample_sales_df(), columns=["注文日", "存在しない列"])
 
     assert "存在しない列" in str(exc_info.value)
+
+
+def test_raises_error_for_invalid_number_sort_value() -> None:
+    df = pd.DataFrame({"金額": ["100", "要確認"]})
+
+    with pytest.raises(ValueError) as exc_info:
+        clean_dataframe(df, sort_by="金額", sort_type="number")
+
+    assert "数値として変換できない値" in str(exc_info.value)
