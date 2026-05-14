@@ -88,6 +88,20 @@ def test_sorts_by_amount_descending_with_currency_and_full_width_numbers() -> No
     assert list(cleaned["金額"]) == ["¥120,000", "８１，０００", "54,000"]
 
 
+def test_preserves_existing_column_named_like_internal_sort_key() -> None:
+    df = pd.DataFrame(
+        [
+            {"金額": "200", "__csv_cleaner_sort_key__": "残す値B"},
+            {"金額": "100", "__csv_cleaner_sort_key__": "残す値A"},
+        ]
+    )
+
+    cleaned = clean_dataframe(df, sort_by="金額", sort_type="number")
+
+    assert list(cleaned.columns) == ["金額", "__csv_cleaner_sort_key__"]
+    assert list(cleaned["__csv_cleaner_sort_key__"]) == ["残す値A", "残す値B"]
+
+
 def test_raises_error_for_missing_columns() -> None:
     with pytest.raises(MissingColumnsError) as exc_info:
         clean_dataframe(sample_sales_df(), columns=["注文日", "存在しない列"])

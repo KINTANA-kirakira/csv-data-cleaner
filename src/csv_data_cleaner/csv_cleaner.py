@@ -78,15 +78,12 @@ def _sort_dataframe(
     sort_type: SortType,
     sort_order: SortOrder,
 ) -> pd.DataFrame:
-    sort_key_name = "__csv_cleaner_sort_key__"
-    work = df.copy()
-    work[sort_key_name] = _build_sort_key(work[sort_by], sort_type)
-    work = work.sort_values(
-        by=sort_key_name,
+    return df.sort_values(
+        by=sort_by,
         ascending=sort_order == "asc",
         kind="mergesort",
+        key=lambda series: _build_sort_key(series, sort_type),
     )
-    return work.drop(columns=[sort_key_name])
 
 
 def _build_sort_key(series: pd.Series, sort_type: SortType) -> pd.Series:

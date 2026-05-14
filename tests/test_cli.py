@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -108,3 +110,46 @@ def test_cli_returns_error_for_missing_column(tmp_path: Path) -> None:
     assert result.returncode == 1
     assert "存在しない列" in result.stderr
     assert not output_path.exists()
+
+
+def test_installed_console_script_creates_cleaned_csv(tmp_path: Path) -> None:
+    command = shutil.which("csv-data-cleaner")
+    if command is None:
+        pytest.skip("csv-data-cleaner command is available after pip install -e .")
+
+    input_path = tmp_path / "sales_raw.csv"
+    output_path = tmp_path / "sales_cleaned.csv"
+    pd.DataFrame(
+        [
+            {"注文日": "2026-04-02", "顧客名": "北川物流", "金額": "81,000"},
+            {"注文日": "2026-04-01", "顧客名": "青山食品", "金額": "54,000"},
+        ]
+    ).to_csv(input_path, index=False, encoding="utf-8-sig")
+
+    result = subprocess.run(
+        [
+            command,
+            "--input",
+            str(input_path),
+            "--output",
+            str(output_path),
+            "--columns",
+            "注文日,顧客名,金額",
+            "--sort-by",
+            "金額",
+            "--sort-type",
+            "number",
+            "--sort-order",
+            "desc",
+        ],
+        cwd=PROJECT_ROOT,
+        env=CLI_ENV,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+
+    assert result.returncode == 0
+    cleaned = pd.read_csv(output_path, encoding="utf-8-sig")
+    assert list(cleaned["金額"]) == ["81,000", "54,000"]
