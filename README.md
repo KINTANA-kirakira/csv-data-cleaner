@@ -35,16 +35,25 @@ csv-data-cleaner/
 │       └── render_csv_image.py
 └── tests/
     ├── test_cli.py
-    └── test_csv_cleaner.py
+    ├── test_csv_cleaner.py
+    └── test_render_csv_image.py
 ```
 
 ## Setup
 
-通常利用:
+Windows PowerShell:
 
 ```bash
 python -m venv .venv
-.venv\Scripts\activate
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+macOS / Linux:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
